@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -47,8 +48,25 @@ func getNewsContent(url string) bytes.Buffer {
 	return bytes.Buffer{}
 }
 
+type SteamResponse struct {
+	AppID	int	`json:"appid"`
+	NewsItems	[]struct{
+		Title	string	`json:"title"`
+		Date	int	`json:"date"`
+		Url		string	`json:"url"`
+		Author	string	`json:"author"`
+	}	`json:"newsitems"`
+
+}
+
 func main() {
 	url := "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=717790&count=1"
 	data := getNewsContent(url)
+	var steamResponse SteamResponse
+	jsonErr := json.Unmarshal(data.Bytes(), &steamResponse)
+	if jsonErr != nil {
+		log.Fatalf("Could not process API response. Error: %v", jsonErr)
+	}
 	fmt.Println(data.String())
-}
+	fmt.Println(steamResponse)
+	}
