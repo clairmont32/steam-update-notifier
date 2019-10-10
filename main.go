@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,14 +42,34 @@ func getNewsContent(url string) bytes.Buffer {
 		if bufErr != nil && numRead < 1 {
 			log.Fatalf("Could not load response body into content variable. Error: %v", bufErr)
 		}
-		fmt.Println("Successfully loaded the latest news article into into memory!\n", url)
+		fmt.Println("Successfully loaded the latest news article into into memory!")
 		return buffer
 	}
 	return bytes.Buffer{}
 }
 
+type SteamResponse struct {
+	AppNews struct {
+		AppID     int `json:"appid"`
+		NewsItems []struct {
+			Title  string `json:"title"`
+			Date   int    `json:"date"`
+			Url    string `json:"url"`
+			Author string `json:"author"`
+		} `json:"newsitems"`
+	}
+}
+
 func main() {
 	url := "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=717790&count=1"
 	data := getNewsContent(url)
-	fmt.Println(data.String())
+	var steamResponse SteamResponse
+	jsonErr := json.Unmarshal(data.Bytes(), &steamResponse)
+	if jsonErr != nil {
+		log.Fatalf("Could not process API response. Error: %v", jsonErr)
+	}
+	// fmt.Println(data.String())
+	for _, item := range steamResponse.AppNews.NewsItems {
+		fmt.Println(item.Title)
+	}
 }
