@@ -1,13 +1,29 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
+
+func readConfig() {
+	configFile, openErr := os.Open("config.yaml")
+	if openErr != nil {
+		log.Fatalf("Could not open config.yaml. Error: %v", openErr)
+	}
+
+	defer _ = configFile.Close()
+	scanner := bufio.NewScanner(configFile)
+	var configContents []string
+	for scanner.Scan() {
+		configContents = append(configContents, scanner.Text())
+	}
+}
 
 func getNewsContent(url string) bytes.Buffer {
 	fmt.Printf("Performing GET request to %v...\n", url)
