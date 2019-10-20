@@ -35,6 +35,6 @@ jobs:
     steps:
      - name: install steamCMD
        run: |
-        apt-get install steamcmd -y
+        sudo apt-get install steamcmd -y
         steamcmd +login anonymous +app_info_request 717790 +app_info_print 717790 +exit > app_717790.txt
         cat app_717790.txt
