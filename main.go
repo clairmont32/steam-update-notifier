@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-
 	"os"
 	"time"
 )
@@ -16,9 +15,8 @@ import (
 func getWebhookURL() string {
 	if len(os.Getenv("discord")) != 0 {
 		return os.Getenv("discord")
-	} else {
-		log.Fatalf("No discord webhook in environment variable!")
 	}
+	log.Fatalf("No discord webhook in environment variable!")
 	return ""
 }
 
@@ -81,19 +79,19 @@ func getNewsContent(url string) bytes.Buffer {
 	return bytes.Buffer{}
 }
 
-type NewsResponse struct {
+type newsResponse struct {
 	AppNews struct {
 		AppID     int `json:"appid"`
 		NewsItems []struct {
 			Title  string `json:"title"`
 			Date   int    `json:"date"`
-			Url    string `json:"url"`
+			URL    string `json:"url"`
 			Author string `json:"author"`
 		} `json:"newsitems"`
 	}
 }
 
-type DiscordText struct {
+type discordText struct {
 	Content string `json:"content"`
 }
 
@@ -102,7 +100,7 @@ func postToDiscord(content string) {
 	webhookURL := getWebhookURL()
 
 	// parse message into json struct for the payload
-	payload := DiscordText{Content: content}
+	payload := discordText{Content: content}
 	jsonContent, marshErr := json.Marshal(&payload)
 	if marshErr != nil {
 		log.Fatalf("Could not marshal message. Error: %v", marshErr)
@@ -135,10 +133,10 @@ func postToDiscord(content string) {
 	}
 }
 
-func formatNewsMessage(content NewsResponse, appID int) string {
+func formatNewsMessage(content newsResponse, appID int) string {
 	var messageString string
 	for _, item := range content.AppNews.NewsItems {
-		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", appID, item.Title, item.Url)
+		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", appID, item.Title, item.URL)
 	}
 	return messageString
 }
@@ -148,7 +146,7 @@ func main() {
 	for _, appID := range appIDs {
 		url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appID)
 		data := getNewsContent(url)
-		var steamResponse NewsResponse
+		var steamResponse newsResponse
 		jsonErr := json.Unmarshal(data.Bytes(), &steamResponse)
 		if jsonErr != nil {
 			log.Fatalf("Could not process API response. Error: %v", jsonErr)
