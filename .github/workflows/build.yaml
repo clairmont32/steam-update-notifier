@@ -27,7 +27,14 @@ jobs:
 
     - name: Build
       run: | 
-        go get gopkg.in/yaml.v2
+        go get https://github.com/go-yaml/yaml
         go build -v main.go
-      
-      
+  steamCMD:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+     - name: install steamCMD
+       run: |
+        apt-get install steamcmd -y
+        steamcmd +login anonymous +app_info_request 717790 +app_info_print 717790 +exit > app_717790.txt
+        cat app_717790.txt
