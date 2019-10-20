@@ -14,7 +14,7 @@ import (
 )
 
 func getWebhookURL() string {
-	if len(os.Getenv("discord")) != 0 {
+	if len(os.Getenv("discord")) > 0 {
 		return os.Getenv("discord")
 	} else {
 		log.Fatalf("No discord webhook in environment variable!")
