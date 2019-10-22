@@ -34,11 +34,27 @@ func readConfig() {
 	}
 }
 
-func getGameName() {
-	// TODO reach out to steam API to lookup game title
+// TODO: game name to ID
+func getGameName(game string) {
+	responseBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+	var respJson appIDTranslator
+	unMarshErr := json.Unmarshal(responseBytes.Bytes(), &respJson)
+	if unMarshErr != nil {
+		log.Fatalf("Could not parse GetAppList. Error: %v", unMarshErr)
+	}
+
 }
 
-func getNewsContent(url string) bytes.Buffer {
+type appIDTranslator struct {
+	Applist		struct {
+		Apps	[]struct {
+			Appid	int	`json:"appid"`
+			Name	string	`json:"name"`
+		}
+	}
+}
+
+func getAPIContent(url string) bytes.Buffer {
 	fmt.Printf("Performing GET request to %v...\n", url)
 
 	// create HTTP request with specific headers
@@ -60,9 +76,9 @@ func getNewsContent(url string) bytes.Buffer {
 
 	// basic HTTP code handling and load the response body into the buffer
 	if resp.StatusCode == http.StatusTooManyRequests {
-		fmt.Println("Received a HTTP 429 response. Sleeping for 10s!")
+		fmt.Println("Received a HTTP 429 response. Sleepin`g for 10s!")
 		time.Sleep(10 * time.Second)
-		getNewsContent(url)
+		getAPIContent(url)
 
 	} else if resp.StatusCode != http.StatusOK {
 		log.Fatalf("Received an error from %v. Exiting...\nError: %v\nBody: %v\n", url, resp.Status, resp.Body)
@@ -73,7 +89,7 @@ func getNewsContent(url string) bytes.Buffer {
 		if bufErr != nil && numRead < 1 {
 			log.Fatalf("Could not load response body into content variable. Error: %v", bufErr)
 		}
-		fmt.Println("Successfully loaded the latest news article into into memory!")
+
 		return buffer
 	}
 	return bytes.Buffer{}
@@ -142,15 +158,23 @@ func formatNewsMessage(content newsResponse, appID int) string {
 }
 
 func main() {
-	appIDs := []int{717790, 107410, 552990}
-	for _, appID := range appIDs {
+	// appIDs := []int{717790, 107410, 552990}
+	/*
 		url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appID)
-		data := getNewsContent(url)
+		data := getAPIContent(url)
 		var steamResponse newsResponse
 		jsonErr := json.Unmarshal(data.Bytes(), &steamResponse)
 		if jsonErr != nil {
 			log.Fatalf("Could not process API response. Error: %v", jsonErr)
 		}
 		postToDiscord(formatNewsMessage(steamResponse, appID))
+		}
+
+	for _, appID := range appIDs {
+		getAppID()
 	}
+
+	 */
+	getGameName()
+
 }
