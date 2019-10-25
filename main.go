@@ -34,32 +34,33 @@ func readConfig() {
 	}
 }
 
-// TODO: game name to ID
-func getGameName(appid int) (gameName string) {
-	responseBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+// translate appid to game name
+func getGameName(appid int, responseBytes []byte) string {
 	var respJson appIDTranslator
 	unMarshErr := json.Unmarshal(responseBytes, &respJson)
 	if unMarshErr != nil {
 		log.Fatalf("Could not parse GetAppList. Error: %v", unMarshErr)
 	}
 
-	gameList := respJson.Applist.Apps
-	for i, game := range gameList {
+	for _, game := range respJson.Applist.Apps {
 		if game.Appid == appid {
-			fmt.Println(game.Name)
+			return game.Name
 		}
 	}
-
-	return ""
+	failMessage := fmt.Sprintf("%v not found!", appid)
+	return failMessage
 }
 
 type appIDTranslator struct {
 	Applist struct {
-		Appid int    `json:"appid"`
-		Name  string `json:"name"`
+		Apps []struct {
+			Appid int    `json:"appid"`
+			Name  string `json:"name"`
+		}
 	}
 }
 
+// generic HTTP POST to whatever URL you give it
 func getAPIContent(url string) []byte {
 	fmt.Printf("Performing GET request to %v...\n", url)
 
@@ -68,17 +69,14 @@ func getAPIContent(url string) []byte {
 	if reqErr != nil {
 		log.Fatalf("Could not form HTTP Request. Error: %v\n", reqErr)
 	}
-	req.Header.Add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36")
+	req.Header.Add("user-agent", "matthew.clairmont1@gmail.com's app update notifier")
 
 	// create a HTTP client with a 5s timeout
-	client := http.Client{Timeout: 90 * time.Second}
+	client := http.Client{Timeout: 5 * time.Second}
 	resp, getErr := client.Do(req) // send the request
 	if getErr != nil {
 		log.Fatalf("Could not perform HTTP GET to %v. Error: %v\n", url, getErr)
 	}
-
-	// initialize a byte buffer to hold the response body
-	//var buffer bytes.Buffer
 
 	// basic HTTP code handling and load the response body into the buffer
 	if resp.StatusCode == http.StatusTooManyRequests {
@@ -116,6 +114,7 @@ type discordText struct {
 	Content string `json:"content"`
 }
 
+// post string returned from formatNewsMessage() to discord
 func postToDiscord(content string) {
 	// set webhook URL from env vars
 	webhookURL := getWebhookURL()
@@ -154,32 +153,30 @@ func postToDiscord(content string) {
 	}
 }
 
-func formatNewsMessage(content newsResponse, appID int) string {
+// format string for discord notification
+func formatNewsMessage(content newsResponse, name string) string {
 	var messageString string
 	for _, item := range content.AppNews.NewsItems {
-		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", appID, item.Title, item.URL)
+		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", name, item.Title, item.URL)
 	}
 	return messageString
 }
 
 func main() {
-	// appIDs := []int{717790, 107410, 552990}
-	/*
-			url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appID)
-			data := getAPIContent(url)
-			var steamResponse newsResponse
-			jsonErr := json.Unmarshal(data.Bytes(), &steamResponse)
-			if jsonErr != nil {
-				log.Fatalf("Could not process API response. Error: %v", jsonErr)
-			}
-			postToDiscord(formatNewsMessage(steamResponse, appID))
-			}
-
-		for _, appID := range appIDs {
-			getAppID()
+	appIDs := []int{717790}
+	for _, appid := range appIDs {
+		url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
+		data := getAPIContent(url)
+		var steamResponse newsResponse
+		jsonErr := json.Unmarshal(data, &steamResponse)
+		if jsonErr != nil {
+			log.Fatalf("Could not process API response. Error: %v", jsonErr)
 		}
 
-	*/
-	getGameName(717790)
+		// get game name, format message, send to discord
+		nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+		name := getGameName(appid, nameBytes)
+		postToDiscord(formatNewsMessage(steamResponse, name))
+	}
 
 }
