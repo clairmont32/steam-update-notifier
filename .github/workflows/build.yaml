@@ -30,9 +30,12 @@ jobs:
         go get gopkg.in/yaml.v2
         go build -v main.go
         
-    - name: install steamCMD
+    - name: Install SteamCMD
       run: |
-        sudo apt-get install steamcmd -y
+        curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
+    
+    - name: Get AppID Info
+      run: |
         steamcmd +login anonymous +app_info_request 717790 +app_info_print 717790 +exit > app_717790.txt
         cat app_717790.txt  
 
