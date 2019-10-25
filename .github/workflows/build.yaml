@@ -33,10 +33,9 @@ jobs:
     - name: Install SteamCMD
       run: |
         curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
-        cd linux32/
     
     - name: Get AppID Info
       run: |
-        ./steamcmd +login anonymous +app_info_request 717790 +app_info_print 717790 +exit > app_717790.txt
+        ./steamcmd.sh +login anonymous +app_info_request 717790 +app_info_print 717790 +exit > app_717790.txt
         cat app_717790.txt  
 
