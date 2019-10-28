@@ -27,8 +27,8 @@ jobs:
 
     - name: Build
       run: | 
-        go get gopkg.in/yaml.v2
         go build -v main.go
+      # go get gopkg.in/yaml.v2
 
     # - name: Install SteamCMD
     #   run: |
