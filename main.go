@@ -51,26 +51,6 @@ func getGameName(appid int, responseBytes []byte) string {
 	return failMessage
 }
 
-func saveNewsGid(steamReseponse newsResponse, appid int) {
-	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_APPEND, 0666)
-	if openErr != nil {
-		log.Fatalf("Could not open news_gid.txt. Error: %v", openErr)
-	}
-	defer file.Close()
-
-	for _, item := range steamReseponse.AppNews.NewsItems {
-		n, writeErr := file.Write([]byte(item.Gid))
-		if n < 1 || writeErr != nil {
-			log.Fatalf("Could not write GID to news_gid.txt")
-		}
-		log.Printf("GID %v written to file", item.Gid)
-	}
-}
-
-func readNewsGid() {
-	// TODO: read/return file contents of news_gid.txt for comparison against previous news articles posted
-}
-
 type appIDTranslator struct {
 	Applist struct {
 		Apps []struct {
@@ -78,6 +58,28 @@ type appIDTranslator struct {
 			Name  string `json:"name"`
 		}
 	}
+}
+
+func saveNewsGid(gid string) {
+	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_APPEND, 0666)
+	if openErr != nil {
+		log.Fatalf("Could not open news_gid.txt. Error: %v", openErr)
+	}
+	defer file.Close()
+
+	n, writeErr := file.WriteString(gid + "\n")
+	if n < 1 || writeErr != nil {
+		log.Fatalf("Could not write GID to news_gid.txt")
+	}
+	log.Printf("GID %v written to file", gid)
+}
+
+func readNewsGid() []byte {
+	gids, openErr := ioutil.ReadFile("news_gid.txt")
+	if openErr != nil {
+		log.Fatalf("Could not read from news_gid.txt. Error: %v", openErr)
+	}
+	return gids
 }
 
 // generic HTTP POST to whatever URL you give it
