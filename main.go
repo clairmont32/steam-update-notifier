@@ -185,8 +185,17 @@ func formatNewsMessage(content newsResponse, name string) string {
 	return messageString
 }
 
-func main() {
+func getSteamNews() {
 	appIDs := []int{717790}
+
+	gidMap := make(map[string]string)
+	if len(gidMap) < 0 {
+		savedGids := readNewsGid()
+		for _, gid := range savedGids {
+			gidMap[string(gid)] = ""
+		}
+	}
+
 	for _, appid := range appIDs {
 		url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
 		data := getAPIContent(url)
@@ -196,10 +205,27 @@ func main() {
 			log.Fatalf("Could not process API response. Error: %v", jsonErr)
 		}
 
-		// get game name, format message, send to discord
-		nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
-		name := getGameName(appid, nameBytes)
-		postToDiscord(formatNewsMessage(steamResponse, name))
+		// check if each news GID is in the map
+		// if not, add it and save to file in case the service dies for some reason
+		for _, item := range steamResponse.AppNews.NewsItems {
+			if _, ok := gidMap[item.Gid]; !ok {
+				gidMap[item.Gid] = ""
+				saveNewsGid(item.Gid)
+
+				// get game name, format message, send to discord
+				nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+				name := getGameName(appid, nameBytes)
+				postToDiscord(formatNewsMessage(steamResponse, name))
+			}
+		}
+
+	}
+}
+
+func main() {
+	for {
+		getSteamNews()
+		time.Sleep(1 * time.Hour)
 	}
 
 }
