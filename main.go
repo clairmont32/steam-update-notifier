@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -190,8 +191,7 @@ func formatNewsMessage(content newsResponse, name string) string {
 	return messageString
 }
 
-func getSteamNews(gidMap map[string]string) {
-	appIDs := []int{717790}
+func getSteamNews(gidMap map[string]string, appid int) {
 	if len(gidMap) < 0 {
 		savedGids := readNewsGid()
 		for _, gid := range savedGids {
@@ -199,31 +199,71 @@ func getSteamNews(gidMap map[string]string) {
 		}
 	}
 
-	for _, appid := range appIDs {
-		url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
-		data := getAPIContent(url)
-		var steamResponse newsResponse
-		jsonErr := json.Unmarshal(data, &steamResponse)
-		if jsonErr != nil {
-			log.Fatalf("Could not process API response. Error: %v", jsonErr)
-		}
+	url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
+	data := getAPIContent(url)
+	var steamResponse newsResponse
+	jsonErr := json.Unmarshal(data, &steamResponse)
+	if jsonErr != nil {
+		log.Fatalf("Could not process API response. Error: %v", jsonErr)
+	}
 
-		// check if each news GID is in the map
-		// if not, add it and save to file in case the service dies for some reason
-		for _, item := range steamResponse.AppNews.NewsItems {
-			if _, ok := gidMap[item.Gid]; !ok {
-				gidMap[item.Gid] = ""
-				saveNewsGid(item.Gid)
-				// get game name, format message, send to discord
-				nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
-				name := getGameName(appid, nameBytes)
-				fmt.Println(name)
-				// postToDiscord(formatNewsMessage(steamResponse, name))
-			} else {
-				log.Println("Nothing new found")
-			}
+	// check if each news GID is in the map
+	// if not, add it and save to file in case the service dies for some reason
+	for _, item := range steamResponse.AppNews.NewsItems {
+		if _, ok := gidMap[item.Gid]; !ok {
+			gidMap[item.Gid] = ""
+			saveNewsGid(item.Gid)
+			// get game name, format message, send to discord
+			nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+			name := getGameName(appid, nameBytes)
+			fmt.Println(name)
+			// postToDiscord(formatNewsMessage(steamResponse, name))
+		} else {
+			log.Println("Nothing new found")
 		}
 	}
+}
+
+func installSteamCMD() bool {
+	_, stErr := os.Stat("steamcmd.sh")
+	if os.IsNotExist(stErr) {
+		log.Println("Did not find SteamCMD in the current dir. Installing now...")
+		installerCmd := fmt.Sprint("curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | tar zxvf -")
+
+		execErr := exec.Command(installerCmd).Run()
+		if execErr != nil {
+			log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installerCmd)
+			log.Fatalf("Error: %v\n", execErr)
+		}
+		// call this function again to ensure its installed
+		installSteamCMD()
+
+	}
+	log.Println("Found steamcmd.sh in the current dir; continuing...")
+	return true
+}
+
+func getAppInfo(appid int) []byte {
+	if installSteamCMD() {
+		requestInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_request %v +exit", appid)
+		_, reqErr := exec.Command(requestInfo).Output()
+		if reqErr != nil {
+			log.Fatalf("Encountered and error requesting app info. Error: %v", reqErr)
+		}
+		log.Println("App info requested successfully!")
+
+		printInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_print %v +exit", appid)
+		infoByte, infoErr := exec.Command(printInfo).Output()
+		if infoErr != nil {
+			log.Fatalf("Encountered an error obtaining app information. Error: %v", infoErr)
+		}
+		log.Println("App info obtained.")
+
+		return infoByte
+	}
+
+	log.Fatalf("Encountered an unexpected issue interacting with SteamCMD.")
+	return []byte{}
 }
 
 func main() {
@@ -238,11 +278,16 @@ func main() {
 		_ = file.Close()
 	}
 
-	// every hour, check for a new steam news post for a list of appids
+	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		getSteamNews(gidMap) // use a new goroutine for steam news
-		time.Sleep(5 * time.Second)
+		appIDs := []int{717790}
+		for _, appid := range appIDs {
+			getSteamNews(gidMap, appid) // use a new goroutine for steam news
+			go getAppInfo(appid)
+		}
+
+		time.Sleep(15 * time.Minute)
 	}
 
 }
