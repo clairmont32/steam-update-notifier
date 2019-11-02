@@ -61,14 +61,14 @@ type appIDTranslator struct {
 }
 
 func saveNewsGid(gid string) {
-	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_APPEND, 0666)
+	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if openErr != nil {
 		log.Fatalf("Could not open news_gid.txt. Error: %v", openErr)
 	}
 	defer file.Close()
 
 	log.Println(gid)
-	n, writeErr := file.WriteString(gid)
+	n, writeErr := file.WriteString(gid + "\n")
 	if writeErr != nil {
 		log.Fatalf("Could not write GID to news_gid.txt")
 	}
@@ -89,7 +89,7 @@ func readNewsGid() []byte {
 
 // generic HTTP POST to whatever URL you give it
 func getAPIContent(url string) []byte {
-	fmt.Printf("Performing GET request to %v...\n", url)
+	log.Printf("Performing GET request to %v...\n", url)
 
 	// create HTTP request with specific headers
 	req, reqErr := http.NewRequest("GET", url, nil)
@@ -107,7 +107,7 @@ func getAPIContent(url string) []byte {
 
 	// basic HTTP code handling and load the response body into the buffer
 	if resp.StatusCode == http.StatusTooManyRequests {
-		fmt.Println("Received a HTTP 429 response. Sleepin`g for 10s!")
+		log.Println("Received a HTTP 429 response. Sleepin`g for 10s!")
 		time.Sleep(10 * time.Second)
 		getAPIContent(url)
 
@@ -190,10 +190,8 @@ func formatNewsMessage(content newsResponse, name string) string {
 	return messageString
 }
 
-func getSteamNews() {
+func getSteamNews(gidMap map[string]string) {
 	appIDs := []int{717790}
-
-	gidMap := make(map[string]string)
 	if len(gidMap) < 0 {
 		savedGids := readNewsGid()
 		for _, gid := range savedGids {
@@ -216,28 +214,35 @@ func getSteamNews() {
 			if _, ok := gidMap[item.Gid]; !ok {
 				gidMap[item.Gid] = ""
 				saveNewsGid(item.Gid)
-
 				// get game name, format message, send to discord
 				nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
 				name := getGameName(appid, nameBytes)
-				postToDiscord(formatNewsMessage(steamResponse, name))
+				fmt.Println(name)
+				// postToDiscord(formatNewsMessage(steamResponse, name))
+			} else {
+				log.Println("Nothing new found")
 			}
 		}
-
 	}
 }
 
 func main() {
-	file, createErr := os.Open("news_updater.txt")
-	if createErr != nil {
-		log.Fatalf("Could not create log file")
+	// ensure logfile exists, if not, create it.
+	logfile := "news_updater.log"
+	_, statErr := os.Stat(logfile)
+	if os.IsNotExist(statErr) {
+		file, crErr := os.Create(logfile)
+		if crErr != nil {
+			fmt.Printf("Could not create logfile. Error: %v", crErr)
+		}
+		_ = file.Close()
 	}
-	defer file.Close()
-	log.SetOutput(file)
 
+	// every hour, check for a new steam news post for a list of appids
+	gidMap := make(map[string]string)
 	for {
-		getSteamNews()
-		time.Sleep(1 * time.Hour)
+		getSteamNews(gidMap) // use a new goroutine for steam news
+		time.Sleep(5 * time.Second)
 	}
 
 }
