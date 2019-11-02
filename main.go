@@ -67,10 +67,15 @@ func saveNewsGid(gid string) {
 	}
 	defer file.Close()
 
-	n, writeErr := file.WriteString(gid + "\n")
-	if n < 1 || writeErr != nil {
+	log.Println(gid)
+	n, writeErr := file.WriteString(gid)
+	if writeErr != nil {
 		log.Fatalf("Could not write GID to news_gid.txt")
 	}
+	if n < 1 {
+		log.Fatal("Did not write more than 1 byte to news_gid.txt")
+	}
+
 	log.Printf("GID %v written to file", gid)
 }
 
@@ -223,6 +228,13 @@ func getSteamNews() {
 }
 
 func main() {
+	file, createErr := os.Open("news_updater.txt")
+	if createErr != nil {
+		log.Fatalf("Could not create log file")
+	}
+	defer file.Close()
+	log.SetOutput(file)
+
 	for {
 		getSteamNews()
 		time.Sleep(1 * time.Hour)
