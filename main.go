@@ -132,7 +132,7 @@ type newsResponse struct {
 		NewsItems []struct {
 			Gid    string `json:"gid"`
 			Title  string `json:"title"`
-			Date   int    `json:"date"`
+			Date   int64  `json:"date"`
 			URL    string `json:"url"`
 			Author string `json:"author"`
 		} `json:"newsitems"`
@@ -141,6 +141,24 @@ type newsResponse struct {
 
 type discordText struct {
 	Content string `json:"content"`
+}
+
+func checkIfDateWithinHour(date int64) bool {
+	now := time.Now().Unix()
+	timeDiff := date - now
+	if timeDiff > 3600 {
+		return true
+	}
+	return false
+}
+
+// format string for discord notification
+func formatNewsMessage(content newsResponse, name string) string {
+	var messageString string
+	for _, item := range content.AppNews.NewsItems {
+		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", name, item.Title, item.URL)
+	}
+	return messageString
 }
 
 // post string returned from formatNewsMessage() to discord
@@ -182,16 +200,8 @@ func postToDiscord(content string) {
 	}
 }
 
-// format string for discord notification
-func formatNewsMessage(content newsResponse, name string) string {
-	var messageString string
-	for _, item := range content.AppNews.NewsItems {
-		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", name, item.Title, item.URL)
-	}
-	return messageString
-}
-
 func getSteamNews(gidMap map[string]string, appid int) {
+
 	if len(gidMap) < 0 {
 		savedGids := readNewsGid()
 		for _, gid := range savedGids {
@@ -207,19 +217,31 @@ func getSteamNews(gidMap map[string]string, appid int) {
 		log.Fatalf("Could not process API response. Error: %v", jsonErr)
 	}
 
+	// debug print
+	// fmt.Println(steamResponse.AppNews.NewsItems)
+
 	// check if each news GID is in the map
 	// if not, add it and save to file in case the service dies for some reason
 	for _, item := range steamResponse.AppNews.NewsItems {
-		if _, ok := gidMap[item.Gid]; !ok {
-			gidMap[item.Gid] = ""
-			saveNewsGid(item.Gid)
-			// get game name, format message, send to discord
-			nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
-			name := getGameName(appid, nameBytes)
-			fmt.Println(name)
-			// postToDiscord(formatNewsMessage(steamResponse, name))
+
+		// primarily for startup, check if new posts within 1 hour so you dont
+		// spam the discord channel with the last news post. unless this is offline for several days, they're old anyway
+		if checkIfDateWithinHour(item.Date) {
+			// check if the gid's are loading into memory already
+			if _, ok := gidMap[item.Gid]; !ok {
+				gidMap[item.Gid] = ""
+				saveNewsGid(item.Gid)
+				// get game name, format message, send to discord
+				nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+				name := getGameName(appid, nameBytes)
+				fmt.Println(name)
+				// postToDiscord(formatNewsMessage(steamResponse, name))
+			} else {
+				log.Println("Nothing new found")
+
+			}
 		} else {
-			log.Println("Nothing new found")
+			log.Println("Nothing new found in last hour")
 		}
 	}
 }
