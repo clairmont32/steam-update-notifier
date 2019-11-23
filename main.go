@@ -231,18 +231,6 @@ func processNewsResponse(gidMap map[string]string, steamResponse newsResponse) {
 	}
 }
 
-type SteamResponse struct {
-	AppNews struct {
-		AppID     int `json:"appid"`
-		NewsItems []struct {
-			Title  string `json:"title"`
-			Date   int    `json:"date"`
-			Url    string `json:"url"`
-			Author string `json:"author"`
-		} `json:"newsitems"`
-	}
-}
-
 func main() {
 	// ensure logfile exists, if not, create it.
 	logfile := "news_updater.log"
