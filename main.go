@@ -21,13 +21,13 @@ func getWebhookURL() string {
 
 // translate appid to game name
 func getGameName(appid int, responseBytes []byte) string {
-	var respJson appIDTranslator
-	unMarshErr := json.Unmarshal(responseBytes, &respJson)
+	var respJSON appIDTranslator
+	unMarshErr := json.Unmarshal(responseBytes, &respJSON)
 	if unMarshErr != nil {
 		log.Fatalf("Could not parse GetAppList. Error: %v", unMarshErr)
 	}
 
-	for _, game := range respJson.Applist.Apps {
+	for _, game := range respJSON.Applist.Apps {
 		if game.Appid == appid {
 			return game.Name
 		}
@@ -260,8 +260,8 @@ func main() {
 	for {
 		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
 		for _, appid := range appIDs {
-			newsJson := getSteamNews(appid) // use a new goroutine for steam news
-			processNewsResponse(gidMap, newsJson)
+			newsJSON := getSteamNews(appid) // use a new goroutine for steam news
+			processNewsResponse(gidMap, newsJSON)
 		}
 		log.Println("Sleeping for 15m...")
 		time.Sleep(15 * time.Minute)
