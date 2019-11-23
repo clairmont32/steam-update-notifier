@@ -303,10 +303,9 @@ func main() {
 	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{717790}
+		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
 		for _, appid := range appIDs {
 			getSteamNews(gidMap, appid) // use a new goroutine for steam news
-			go getAppInfo(appid)
 		}
 
 		time.Sleep(15 * time.Minute)
