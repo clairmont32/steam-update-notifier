@@ -91,9 +91,9 @@ func getAPIContent(url string) []byte {
 	}
 
 	// basic HTTP code handling and load the response body into the buffer
-	if resp.StatusCode == http.StatusTooManyRequests {
-		log.Println("Received a HTTP 429 response. Sleepin`g for 10s!")
-		time.Sleep(10 * time.Second)
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+		log.Printf("Received a HTTP %v response. Sleeping for 60s!", resp.StatusCode)
+		time.Sleep(60 * time.Second)
 		getAPIContent(url)
 
 	} else if resp.StatusCode != http.StatusOK {
