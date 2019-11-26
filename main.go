@@ -81,7 +81,7 @@ func getAPIContent(url string) []byte {
 	if reqErr != nil {
 		log.Fatalf("Could not form HTTP Request. Error: %v\n", reqErr)
 	}
-	req.Header.Add("user-agent", "matthew.clairmont1@gmail.com's app update notifier")
+	req.Header.Add("user-agent", "Go app update notifier")
 
 	// create a HTTP client with a 5s timeout
 	client := http.Client{Timeout: 5 * time.Second}
