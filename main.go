@@ -258,7 +258,7 @@ func main() {
 	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
+		appIDs := []int{893790, 598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
 		for _, appid := range appIDs {
 			newsJSON := getSteamNews(appid) // use a new goroutine for steam news
 			processNewsResponse(gidMap, newsJSON)
