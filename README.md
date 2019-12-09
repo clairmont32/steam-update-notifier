@@ -4,3 +4,5 @@
 # steam-news-alerter
 Detect when a news and game update has been made and some details to a Discord channel
 
+## Release Hash
+MD5 bfe99b5fca5c50291b113bb9d98938a3

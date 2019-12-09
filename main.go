@@ -81,7 +81,7 @@ func getAPIContent(url string) []byte {
 	if reqErr != nil {
 		log.Fatalf("Could not form HTTP Request. Error: %v\n", reqErr)
 	}
-	req.Header.Add("user-agent", "matthew.clairmont1@gmail.com's app update notifier")
+	req.Header.Add("user-agent", "Go app update notifier")
 
 	// create a HTTP client with a 5s timeout
 	client := http.Client{Timeout: 5 * time.Second}
@@ -91,9 +91,9 @@ func getAPIContent(url string) []byte {
 	}
 
 	// basic HTTP code handling and load the response body into the buffer
-	if resp.StatusCode == http.StatusTooManyRequests {
-		log.Println("Received a HTTP 429 response. Sleepin`g for 10s!")
-		time.Sleep(10 * time.Second)
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+		log.Printf("Received a HTTP %v response. Sleeping for 60s!", resp.StatusCode)
+		time.Sleep(60 * time.Second)
 		getAPIContent(url)
 
 	} else if resp.StatusCode != http.StatusOK {
@@ -130,7 +130,7 @@ type discordText struct {
 func checkIfDateWithinHour(date int64) bool {
 	now := time.Now().Unix()
 	timeDiff := date - now
-	if timeDiff > 3600 {
+	if timeDiff < 3600 {
 		return true
 	}
 	return false
@@ -246,7 +246,7 @@ func main() {
 	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
+		appIDs := []int{598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
 		for _, appid := range appIDs {
 			newsJSON := getSteamNews(appid) // use a new goroutine for steam news
 			processNewsResponse(gidMap, newsJSON)
