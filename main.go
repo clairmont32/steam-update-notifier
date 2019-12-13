@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"time"
 )
 
@@ -15,19 +16,19 @@ func getWebhookURL() string {
 	if len(os.Getenv("discord")) > 0 {
 		return os.Getenv("discord")
 	}
-	log.Fatal("No discord webhook in environment variable!")
+	log.Fatalf("No discord webhook in environment variable!")
 	return ""
 }
 
 // translate appid to game name
 func getGameName(appid int, responseBytes []byte) string {
-	var respJSON appIDTranslator
-	unMarshErr := json.Unmarshal(responseBytes, &respJSON)
+	var respJson appIDTranslator
+	unMarshErr := json.Unmarshal(responseBytes, &respJson)
 	if unMarshErr != nil {
 		log.Fatalf("Could not parse GetAppList. Error: %v", unMarshErr)
 	}
 
-	for _, game := range respJSON.Applist.Apps {
+	for _, game := range respJson.Applist.Apps {
 		if game.Appid == appid {
 			return game.Name
 		}
@@ -81,7 +82,7 @@ func getAPIContent(url string) []byte {
 	if reqErr != nil {
 		log.Fatalf("Could not form HTTP Request. Error: %v\n", reqErr)
 	}
-	req.Header.Add("user-agent", "Go app update notifier")
+	req.Header.Add("user-agent", "steam news notifier")
 
 	// create a HTTP client with a 5s timeout
 	client := http.Client{Timeout: 5 * time.Second}
@@ -91,9 +92,9 @@ func getAPIContent(url string) []byte {
 	}
 
 	// basic HTTP code handling and load the response body into the buffer
-	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
-		log.Printf("Received a HTTP %v response. Sleeping for 60s!", resp.StatusCode)
-		time.Sleep(60 * time.Second)
+	if resp.StatusCode == http.StatusTooManyRequests {
+		log.Println("Received a HTTP 429 response. Sleeping for 10s!")
+		time.Sleep(10 * time.Second)
 		getAPIContent(url)
 
 	} else if resp.StatusCode != http.StatusOK {
@@ -102,7 +103,7 @@ func getAPIContent(url string) []byte {
 	} else {
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
-			log.Fatalf("Could not ReadAll from resp.Body. Error: %v", readErr)
+			postToDiscord(fmt.Sprintf("Encountered and error reading response from %v", url))
 		}
 		return body
 	}
@@ -129,8 +130,8 @@ type discordText struct {
 
 func checkIfDateWithinHour(date int64) bool {
 	now := time.Now().Unix()
-	timeDiff := date - now
-	if timeDiff < 3600 {
+	timeDiff := now - date
+	if timeDiff < 86400 {
 		return true
 	}
 	return false
@@ -140,7 +141,7 @@ func checkIfDateWithinHour(date int64) bool {
 func formatNewsMessage(content newsResponse, name string) string {
 	var messageString string
 	for _, item := range content.AppNews.NewsItems {
-		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v", name, item.Title, item.URL)
+		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v\n", name, item.Title, item.URL)
 	}
 	return messageString
 }
@@ -184,8 +185,16 @@ func postToDiscord(content string) {
 	}
 }
 
-func getSteamNews(appid int) newsResponse {
-	// get the latest news post and parse the json
+func getSteamNews(gidMap map[string]string, appid int, name string) {
+	// if the map is empty load the previous GIDs into it
+	// instead of comparing each line of the file
+	if len(gidMap) < 0 {
+		savedGids := readNewsGid()
+		for _, gid := range savedGids {
+			gidMap[string(gid)] = ""
+		}
+	}
+
 	url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
 	data := getAPIContent(url)
 	var steamResponse newsResponse
@@ -193,17 +202,9 @@ func getSteamNews(appid int) newsResponse {
 	if jsonErr != nil {
 		log.Fatalf("Could not process API response. Error: %v", jsonErr)
 	}
-	return steamResponse
-}
 
-func processNewsResponse(gidMap map[string]string, steamResponse newsResponse) {
-	// if the map is empty (due to starting up for the first time), populate it with the local file's GIDs
-	if len(gidMap) < 0 {
-		savedGids := readNewsGid()
-		for _, gid := range savedGids {
-			gidMap[string(gid)] = ""
-		}
-	}
+	// debug print
+	// fmt.Println(steamResponse.AppNews.NewsItems)
 
 	// check if each news GID is in the map
 	// if not, add it and save to file in case the service dies for some reason
@@ -216,41 +217,71 @@ func processNewsResponse(gidMap map[string]string, steamResponse newsResponse) {
 			if _, ok := gidMap[item.Gid]; !ok {
 				gidMap[item.Gid] = ""
 				saveNewsGid(item.Gid)
-				// get game name, format message, send to discord
-				nameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
-				name := getGameName(steamResponse.AppNews.AppID, nameBytes)
-				fmt.Println(name)
 				postToDiscord(formatNewsMessage(steamResponse, name))
-			} else {
-				log.Println("Nothing new found")
-
+				log.Printf("Found update posted for %s", name)
 			}
+
 		} else {
 			log.Println("Nothing new found in last hour")
 		}
 	}
 }
 
-func main() {
-	// ensure logfile exists, if not, create it.
-	logfile := "news_updater.log"
-	_, statErr := os.Stat(logfile)
-	if os.IsNotExist(statErr) {
-		file, crErr := os.Create(logfile)
-		if crErr != nil {
-			fmt.Printf("Could not create logfile. Error: %v", crErr)
+func installSteamCMD() bool {
+	_, stErr := os.Stat("steamcmd.sh")
+	if os.IsNotExist(stErr) {
+		log.Println("Did not find SteamCMD in the current dir. Installing now...")
+		installerCmd := fmt.Sprint("curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | tar zxvf -")
+
+		execErr := exec.Command(installerCmd).Run()
+		if execErr != nil {
+			log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installerCmd)
+			log.Fatalf("Error: %v\n", execErr)
 		}
-		_ = file.Close()
+		// call this function again to ensure its installed
+		installSteamCMD()
+
 	}
+	log.Println("Found steamcmd.sh in the current dir; continuing...")
+	return true
+}
+
+func getAppInfo(appid int) []byte {
+	if installSteamCMD() {
+		requestInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_request %v +exit", appid)
+		_, reqErr := exec.Command(requestInfo).Output()
+		if reqErr != nil {
+			log.Fatalf("Encountered and error requesting app info. Error: %v", reqErr)
+		}
+		log.Println("App info requested successfully!")
+
+		printInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_print %v +exit", appid)
+		infoByte, infoErr := exec.Command(printInfo).Output()
+		if infoErr != nil {
+			log.Fatalf("Encountered an error obtaining app information. Error: %v", infoErr)
+		}
+		log.Println("App info obtained.")
+
+		return infoByte
+	}
+
+	log.Fatalf("Encountered an unexpected issue interacting with SteamCMD.")
+	return []byte{}
+}
+
+func main() {
+	// get list of game names/appids
+	gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
 
 	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
+		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
 		for _, appid := range appIDs {
-			newsJSON := getSteamNews(appid) // use a new goroutine for steam news
-			processNewsResponse(gidMap, newsJSON)
+			name := getGameName(appid, gameNameBytes)
+			getSteamNews(gidMap, appid, name) // use a new goroutine for steam news
 		}
+
 		log.Println("Sleeping for 15m...")
 		time.Sleep(15 * time.Minute)
 	}
