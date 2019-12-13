@@ -46,33 +46,6 @@ type appIDTranslator struct {
 	}
 }
 
-func saveNewsGid(gid string) {
-	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-	if openErr != nil {
-		log.Fatalf("Could not open news_gid.txt. Error: %v", openErr)
-	}
-	defer file.Close()
-
-	log.Println(gid)
-	n, writeErr := file.WriteString(gid + "\n")
-	if writeErr != nil {
-		log.Fatalf("Could not write GID to news_gid.txt")
-	}
-	if n < 1 {
-		log.Fatal("Did not write more than 1 byte to news_gid.txt")
-	}
-
-	log.Printf("GID %v written to file", gid)
-}
-
-func readNewsGid() []byte {
-	gids, openErr := ioutil.ReadFile("news_gid.txt")
-	if openErr != nil {
-		log.Fatalf("Could not read from news_gid.txt. Error: %v", openErr)
-	}
-	return gids
-}
-
 // generic HTTP POST to whatever URL you give it
 func getAPIContent(url string) []byte {
 	log.Printf("Performing GET request to %v...\n", url)
@@ -128,15 +101,6 @@ type discordText struct {
 	Content string `json:"content"`
 }
 
-func checkIfDateWithinHour(date int64) bool {
-	now := time.Now().Unix()
-	timeDiff := now - date
-	if timeDiff < 86400 {
-		return true
-	}
-	return false
-}
-
 // format string for discord notification
 func formatNewsMessage(content newsResponse, name string) string {
 	var messageString string
@@ -185,48 +149,6 @@ func postToDiscord(content string) {
 	}
 }
 
-func getSteamNews(gidMap map[string]string, appid int, name string) {
-	// if the map is empty load the previous GIDs into it
-	// instead of comparing each line of the file
-	if len(gidMap) < 0 {
-		savedGids := readNewsGid()
-		for _, gid := range savedGids {
-			gidMap[string(gid)] = ""
-		}
-	}
-
-	url := fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%v&count=1", appid)
-	data := getAPIContent(url)
-	var steamResponse newsResponse
-	jsonErr := json.Unmarshal(data, &steamResponse)
-	if jsonErr != nil {
-		log.Fatalf("Could not process API response. Error: %v", jsonErr)
-	}
-
-	// debug print
-	// fmt.Println(steamResponse.AppNews.NewsItems)
-
-	// check if each news GID is in the map
-	// if not, add it and save to file in case the service dies for some reason
-	for _, item := range steamResponse.AppNews.NewsItems {
-
-		// primarily for startup, check if new posts within 1 hour so you dont
-		// spam the discord channel with the last news post. unless this is offline for several days, they're old anyway
-		if checkIfDateWithinHour(item.Date) {
-			// check if the gid's are loading into memory already
-			if _, ok := gidMap[item.Gid]; !ok {
-				gidMap[item.Gid] = ""
-				saveNewsGid(item.Gid)
-				postToDiscord(formatNewsMessage(steamResponse, name))
-				log.Printf("Found update posted for %s", name)
-			}
-
-		} else {
-			log.Println("Nothing new found in last hour")
-		}
-	}
-}
-
 func installSteamCMD() bool {
 	_, stErr := os.Stat("steamcmd.sh")
 	if os.IsNotExist(stErr) {
@@ -271,15 +193,15 @@ func getAppInfo(appid int) []byte {
 
 func main() {
 	// get list of game names/appids
-	gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+	// gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
 
 	// check for a new steam news post for a list of appids
-	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
+		appIDs := []int{598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
 		for _, appid := range appIDs {
-			name := getGameName(appid, gameNameBytes)
-			getSteamNews(gidMap, appid, name) // use a new goroutine for steam news
+			// name := getGameName(appid, gameNameBytes)
+			fmt.Println(appid)
+
 		}
 
 		log.Println("Sleeping for 15m...")
