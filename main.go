@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"time"
 )
 
@@ -203,9 +202,6 @@ func getSteamNews(gidMap map[string]string, appid int, name string) {
 		log.Fatalf("Could not process API response. Error: %v", jsonErr)
 	}
 
-	// debug print
-	// fmt.Println(steamResponse.AppNews.NewsItems)
-
 	// check if each news GID is in the map
 	// if not, add it and save to file in case the service dies for some reason
 	for _, item := range steamResponse.AppNews.NewsItems {
@@ -227,48 +223,6 @@ func getSteamNews(gidMap map[string]string, appid int, name string) {
 	}
 }
 
-func installSteamCMD() bool {
-	_, stErr := os.Stat("steamcmd.sh")
-	if os.IsNotExist(stErr) {
-		log.Println("Did not find SteamCMD in the current dir. Installing now...")
-		installerCmd := fmt.Sprint("curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | tar zxvf -")
-
-		execErr := exec.Command(installerCmd).Run()
-		if execErr != nil {
-			log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installerCmd)
-			log.Fatalf("Error: %v\n", execErr)
-		}
-		// call this function again to ensure its installed
-		installSteamCMD()
-
-	}
-	log.Println("Found steamcmd.sh in the current dir; continuing...")
-	return true
-}
-
-func getAppInfo(appid int) []byte {
-	if installSteamCMD() {
-		requestInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_request %v +exit", appid)
-		_, reqErr := exec.Command(requestInfo).Output()
-		if reqErr != nil {
-			log.Fatalf("Encountered and error requesting app info. Error: %v", reqErr)
-		}
-		log.Println("App info requested successfully!")
-
-		printInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_print %v +exit", appid)
-		infoByte, infoErr := exec.Command(printInfo).Output()
-		if infoErr != nil {
-			log.Fatalf("Encountered an error obtaining app information. Error: %v", infoErr)
-		}
-		log.Println("App info obtained.")
-
-		return infoByte
-	}
-
-	log.Fatalf("Encountered an unexpected issue interacting with SteamCMD.")
-	return []byte{}
-}
-
 func main() {
 	// get list of game names/appids
 	gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
@@ -276,7 +230,7 @@ func main() {
 	// check for a new steam news post for a list of appids
 	gidMap := make(map[string]string)
 	for {
-		appIDs := []int{717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 943130, 771800}
+		appIDs := []int{598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
 		for _, appid := range appIDs {
 			name := getGameName(appid, gameNameBytes)
 			getSteamNews(gidMap, appid, name) // use a new goroutine for steam news
