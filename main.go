@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -19,20 +18,6 @@ func getWebhookURL() string {
 	}
 	log.Fatalf("No discord webhook in environment variable!")
 	return ""
-}
-
-func readConfig() {
-	configFile, openErr := os.Open("config.yaml")
-	if openErr != nil {
-		log.Fatalf("Could not open config.yaml. Error: %v", openErr)
-	}
-
-	defer configFile.Close()
-	scanner := bufio.NewScanner(configFile)
-	var configContents []string
-	for scanner.Scan() {
-		configContents = append(configContents, scanner.Text())
-	}
 }
 
 // translate appid to game name
