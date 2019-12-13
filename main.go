@@ -130,7 +130,7 @@ type discordText struct {
 func checkIfDateWithinHour(date int64) bool {
 	now := time.Now().Unix()
 	timeDiff := now - date
-	if timeDiff < 86400 {
+	if timeDiff < 3600 {
 		return true
 	}
 	return false
