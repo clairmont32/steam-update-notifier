@@ -84,30 +84,13 @@ func getAPIContent(url string) []byte {
 
 }
 
-type newsResponse struct {
-	AppNews struct {
-		AppID     int `json:"appid"`
-		NewsItems []struct {
-			Gid    string `json:"gid"`
-			Title  string `json:"title"`
-			Date   int64  `json:"date"`
-			URL    string `json:"url"`
-			Author string `json:"author"`
-		} `json:"newsitems"`
-	}
-}
-
 type discordText struct {
 	Content string `json:"content"`
 }
 
 // format string for discord notification
-func formatNewsMessage(content newsResponse, name string) string {
-	var messageString string
-	for _, item := range content.AppNews.NewsItems {
-		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v\n", name, item.Title, item.URL)
-	}
-	return messageString
+func formatBuildMessage(name string) string {
+	return ""
 }
 
 // post string returned from formatNewsMessage() to discord
@@ -149,45 +132,45 @@ func postToDiscord(content string) {
 	}
 }
 
-func installSteamCMD() bool {
+func installSteamCMD() {
+	log.Println("Installing SteamCMD...")
+	var outBytes bytes.Buffer
+
+	// TODO: Figure out why this is producing a "no such file or directory" error
+
+	installCommand := "/usr/bin/curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | /bin/tar zxvf -"
+	cmd := exec.Command(installCommand)
+	cmd.Stdout = &outBytes
+	execErr := cmd.Run()
+	if execErr != nil {
+		log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installCommand)
+		log.Fatalf("Error: %v\n", execErr)
+		return
+	}
+
+	// do an install check again again to ensure its installed
+	if !isSteamCMDInstalled() {
+		installSteamCMD()
+	}
+}
+
+func isSteamCMDInstalled() bool {
 	_, stErr := os.Stat("steamcmd.sh")
 	if os.IsNotExist(stErr) {
-		log.Println("Did not find SteamCMD in the current dir. Installing now...")
-		installerCmd := fmt.Sprint("curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | tar zxvf -")
-
-		execErr := exec.Command(installerCmd).Run()
-		if execErr != nil {
-			log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installerCmd)
-			log.Fatalf("Error: %v\n", execErr)
-		}
-		// call this function again to ensure its installed
-		installSteamCMD()
-
+		log.Println("Did not find SteamCMD in the current dir")
+		return false
 	}
-	log.Println("Found steamcmd.sh in the current dir; continuing...")
 	return true
 }
 
 func getAppInfo(appid int) []byte {
-	if installSteamCMD() {
-		requestInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_request %v +exit", appid)
-		_, reqErr := exec.Command(requestInfo).Output()
-		if reqErr != nil {
-			log.Fatalf("Encountered and error requesting app info. Error: %v", reqErr)
-		}
-		log.Println("App info requested successfully!")
-
-		printInfo := fmt.Sprintf("./steamcmd.sh +login anonymous +app_info_print %v +exit", appid)
-		infoByte, infoErr := exec.Command(printInfo).Output()
-		if infoErr != nil {
-			log.Fatalf("Encountered an error obtaining app information. Error: %v", infoErr)
-		}
-		log.Println("App info obtained.")
-
-		return infoByte
+	if isSteamCMDInstalled() {
+		fmt.Println("Success!")
+		return []byte{}
+	} else {
+		installSteamCMD()
 	}
 
-	log.Fatalf("Encountered an unexpected issue interacting with SteamCMD.")
 	return []byte{}
 }
 
@@ -196,16 +179,16 @@ func main() {
 	// gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
 
 	// check for a new steam news post for a list of appids
-	for {
-		appIDs := []int{598330, 16900, 673610, 487120, 717790, 383120, 530870, 271590, 674370, 552990, 587120, 613100, 1126050, 943130, 771800, 803980, 809720, 527100, 446800, 530870}
-		for _, appid := range appIDs {
-			// name := getGameName(appid, gameNameBytes)
-			fmt.Println(appid)
+	/*
+		for {
+			appIDs := []int{717790}
+			for _, appid := range appIDs {
+				// name := getGameName(appid, gameNameBytes)
+				fmt.Println(appid)
+			}
+	*/
+	getAppInfo(717790)
 
-		}
-
-		log.Println("Sleeping for 15m...")
-		time.Sleep(15 * time.Minute)
-	}
-
+	//	log.Println("Sleeping for 15m...")
+	//	time.Sleep(15 * time.Minute)
 }
