@@ -33,7 +33,3 @@ jobs:
     - name: Build executable
       run: go build
     
-    - name: Run steam-update-notifier
-      run: ./steam-update-notifier
-      
-      
