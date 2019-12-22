@@ -2,7 +2,6 @@ name: Test SteamCMD Branch
 on:
   push:
     branches: steamCMD
-    branches-ignore: master
     
 jobs:
   job_id: 
