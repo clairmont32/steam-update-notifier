@@ -2,6 +2,7 @@ name: Test SteamCMD Branch
 on:
   push:
     branches: steamCMD
+  
     
 jobs:
   job_id: 
