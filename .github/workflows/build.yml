@@ -1,13 +1,15 @@
-name: Test Run
+name: Test Master Branch Build
 on:
   push:
     branches: master
-jobs:
-  build:
-    name: Ubuntu setup
-    runs-on: ubuntu-latest
-    steps:
 
+jobs:
+  job_id:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    name: Build Check
+   
+    steps: 
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
@@ -22,14 +24,9 @@ jobs:
             dep ensure
         fi
 
-    - name: Install SteamCMD
-      run: |
-            curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
-            ./steamcmd.sh +login anonymous +exit
-
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
 
     - name: Build executable
       run: go build
-    
+
