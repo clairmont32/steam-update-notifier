@@ -1,21 +1,18 @@
-name: Build Check
+name: Test Run
 on:
   push:
-    branches: dev
+    branches: master
 jobs:
   build:
     name: Ubuntu setup
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.13.5
       id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
 
     - name: Get dependencies
       run: |
@@ -25,9 +22,18 @@ jobs:
             dep ensure
         fi
 
-    - name: Build
-      run: | 
-        go get https://github.com/go-yaml/yaml
-        go build -v main.go
+    - name: Install SteamCMD
+      run: |
+            curl -sqL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" | tar zxvf -
+            ./steamcmd.sh +login anonymous +exit
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v1
+
+    - name: Build executable
+      run: go build
+    
+    - name: Run steam-update-notifier
+      run: ./steam-update-notifier
       
       
