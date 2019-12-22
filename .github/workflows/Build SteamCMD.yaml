@@ -1,4 +1,4 @@
-name: Test SteamCMD Branch
+name: SteamCMD Build Check
 on:
   push:
     branches: steamcmd
@@ -25,7 +25,7 @@ jobs:
    - name: Check out code into the Go module directory
      uses: actions/checkout@v1
 
-   - name: Get dependencies
+   - name: Get Dependencies
      run: |
         go get -v -t -d ./...
         if [ -f Gopkg.toml ]; then
@@ -34,3 +34,6 @@ jobs:
         fi
    - name: Build
      run: go build -v .
+   
+   - name: Run Executable
+     run: ./steam-update-notifier
