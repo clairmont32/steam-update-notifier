@@ -1,7 +1,7 @@
 name: Test SteamCMD Branch
 on:
   push:
-    branches: steamCMD
+    branches: steamcmd
   
     
 jobs:
