@@ -132,46 +132,34 @@ func postToDiscord(content string) {
 	}
 }
 
-func installSteamCMD() {
-	log.Println("Installing SteamCMD...")
-	var outBytes bytes.Buffer
-
-	// TODO: Figure out why this is producing a "no such file or directory" error
-
-	installCommand := "/usr/bin/curl -sqL 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz' | /bin/tar zxvf -"
-	cmd := exec.Command(installCommand)
-	cmd.Stdout = &outBytes
-	execErr := cmd.Run()
-	if execErr != nil {
-		log.Printf("Encountered an issue installing SteamCMD. Please install it manually with '%v'\n", installCommand)
-		log.Fatalf("Error: %v\n", execErr)
-		return
-	}
-
-	// do an install check again again to ensure its installed
-	if !isSteamCMDInstalled() {
-		installSteamCMD()
-	}
-}
-
 func isSteamCMDInstalled() bool {
 	_, stErr := os.Stat("steamcmd.sh")
 	if os.IsNotExist(stErr) {
-		log.Println("Did not find SteamCMD in the current dir")
+		log.Println("Did not find SteamCMD in the current dir. Please install it before proceeding.")
 		return false
 	}
 	return true
 }
 
-func getAppInfo(appid int) []byte {
+func getBuildInfo(appid int) []byte {
 	if isSteamCMDInstalled() {
 		fmt.Println("Success!")
+		issueSteamCommand(appid)
+
 		return []byte{}
-	} else {
-		installSteamCMD()
 	}
 
 	return []byte{}
+}
+
+func issueSteamCommand(appid int) {
+	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
+	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
+	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+quit").Output()
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+	fmt.Println(string(outBytes))
 }
 
 func main() {
@@ -187,7 +175,7 @@ func main() {
 				fmt.Println(appid)
 			}
 	*/
-	getAppInfo(717790)
+	getBuildInfo(717790)
 
 	//	log.Println("Sleeping for 15m...")
 	//	time.Sleep(15 * time.Minute)
