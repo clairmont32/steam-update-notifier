@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"time"
 )
 
@@ -141,25 +142,33 @@ func isSteamCMDInstalled() bool {
 	return true
 }
 
-func getBuildInfo(appid int) []byte {
+func getBuildInfo(appid int) {
 	if isSteamCMDInstalled() {
 		fmt.Println("Success!")
-		issueSteamCommand(appid)
+		resp, respErr := getAppIDInfo(appid)
+		if respErr != nil {
+			log.Println("Error getting build info")
+			log.Println(respErr)
+		}
 
-		return []byte{}
+		branchPos := bytes.Index(resp, []byte("branches"))
+		tmpString := string(resp[branchPos:])
+		fmt.Print(tmpString)
+		exp, compErr  := regexp.Compile(".{1,+}[0-9]{1+}")
+		if compErr != nil {
+			log.Println("regex compile err")
+		}
+		if matched := exp.FindAllString(tmpString, -1); matched != nil {
+			fmt.Println(matched)
+		}
 	}
-
-	return []byte{}
 }
 
-func issueSteamCommand(appid int) {
+func getAppIDInfo(appid int) ([]byte, error) {
 	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
 	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
-	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+quit").Output()
-	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
-	fmt.Println(string(outBytes))
+	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+exit").Output()
+	return outBytes, err
 }
 
 func main() {
