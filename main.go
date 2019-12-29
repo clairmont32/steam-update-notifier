@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -152,15 +153,14 @@ func getBuildInfo(appid int) {
 		}
 
 		branchPos := bytes.Index(resp, []byte("branches"))
-		tmpString := string(resp[branchPos:])
-		fmt.Print(tmpString)
-		exp, compErr  := regexp.Compile(".{1,+}[0-9]{1+}")
-		if compErr != nil {
-			log.Println("regex compile err")
-		}
-		if matched := exp.FindAllString(tmpString, -1); matched != nil {
-			fmt.Println(matched)
-		}
+		length := len(string(resp)) - 1
+		tmpString := string(resp[branchPos:length])
+
+		spTrimStr := strings.TrimSpace(tmpString)
+		remChars, compErr := regexp.Compile("\{")
+		tabTrimStr := strings.ReplaceAll(spTrimStr, "\t", "")
+		remBraceStr := strings.ReplaceAll(tabTrimStr, "}", "")
+		fmt.Println(remBraceStr)
 	}
 }
 
