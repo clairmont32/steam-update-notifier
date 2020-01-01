@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -143,25 +144,33 @@ func isSteamCMDInstalled() bool {
 	return true
 }
 
-func getBuildInfo(appid int) {
+// if
+func getBuildInfo(appid int) ([]string, error) {
 	if isSteamCMDInstalled() {
 		fmt.Println("Success!")
 		resp, respErr := getAppIDInfo(appid)
 		if respErr != nil {
-			log.Println("Error getting build info")
-			log.Println(respErr)
+			return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
 		}
 
 		branchPos := bytes.Index(resp, []byte("branches"))
 		length := len(string(resp)) - 1
 		tmpString := string(resp[branchPos:length])
 
-		spTrimStr := strings.TrimSpace(tmpString)
-		remChars, compErr := regexp.Compile("\{")
-		tabTrimStr := strings.ReplaceAll(spTrimStr, "\t", "")
-		remBraceStr := strings.ReplaceAll(tabTrimStr, "}", "")
-		fmt.Println(remBraceStr)
+		trimNewline := strings.Trim(tmpString, "\n")
+		remTabs := strings.ReplaceAll(trimNewline, "\t", "")
+		re, compErr := regexp.Compile("(\"buildid\"{2}\\d+\")")
+		if compErr != nil {
+			return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
+		}
+		if matchSlice := re.FindAllString(remTabs, 9); matchSlice != nil {
+			fmt.Println(matchSlice)
+			return matchSlice, nil
+		} else {
+			return nil, errors.New("could not find any build information from steamcmd")
+		}
 	}
+	return nil, errors.New("did not find steamcmd in the run dir")
 }
 
 func getAppIDInfo(appid int) ([]byte, error) {
