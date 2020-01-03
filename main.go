@@ -11,7 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"strings"
+	"strconv"
 	"time"
 )
 
@@ -144,8 +144,8 @@ func isSteamCMDInstalled() bool {
 	return true
 }
 
-// if
-func getBuildInfo(appid int) ([]string, error) {
+// if steamcmd is installed. get the build IDs and return them as a slice
+func getAppBuildInfo(appid int) ([]string, error) {
 	if isSteamCMDInstalled() {
 		fmt.Println("Success!")
 		resp, respErr := getAppIDInfo(appid)
@@ -157,13 +157,16 @@ func getBuildInfo(appid int) ([]string, error) {
 		length := len(string(resp)) - 1
 		tmpString := string(resp[branchPos:length])
 
-		trimNewline := strings.Trim(tmpString, "\n")
-		remTabs := strings.ReplaceAll(trimNewline, "\t", "")
-		re, compErr := regexp.Compile("(\"buildid\"{2}\\d+\")")
+		//trimNewline := strings.Trim(tmpString, "\n")
+		//remTabs := strings.ReplaceAll(trimNewline, "\t", "")
+
+		// simple regex to obtain only the build IDs but not epoch time
+		re, compErr := regexp.Compile("\\d{5,8}")
 		if compErr != nil {
 			return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
 		}
-		if matchSlice := re.FindAllString(remTabs, 9); matchSlice != nil {
+
+		if matchSlice := re.FindAllString(tmpString, 2); matchSlice != nil {
 			fmt.Println(matchSlice)
 			return matchSlice, nil
 		} else {
@@ -173,12 +176,35 @@ func getBuildInfo(appid int) ([]string, error) {
 	return nil, errors.New("did not find steamcmd in the run dir")
 }
 
+// convert each build id into int and add to map
+func parseBuildSlice(buildID []string) (map[string]int, error) {
+	builds := make(map[string]int)
+
+	if pubBuildID, pubErr := strconv.Atoi(buildID[0]); pubErr != nil {
+		builds["public"] = pubBuildID
+	} else {
+		return nil, errors.New("could not convert public build id into int")
+	}
+
+	if expBuildID, expErr := strconv.Atoi(buildID[1]); expErr != nil {
+		builds["experimental"] = expBuildID
+	} else {
+		return nil, errors.New("could not convert experimental build id into int")
+	}
+
+	return builds, nil
+
+}
+
+
+
 func getAppIDInfo(appid int) ([]byte, error) {
 	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
 	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
 	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+exit").Output()
 	return outBytes, err
 }
+
 
 func main() {
 	// get list of game names/appids
@@ -193,7 +219,7 @@ func main() {
 				fmt.Println(appid)
 			}
 	*/
-	getBuildInfo(717790)
+	getAppBuildInfo(717790)
 
 	//	log.Println("Sleeping for 15m...")
 	//	time.Sleep(15 * time.Minute)
