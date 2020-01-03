@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -138,55 +139,62 @@ func postToDiscord(content string) {
 func isSteamCMDInstalled() bool {
 	_, stErr := os.Stat("steamcmd.sh")
 	if os.IsNotExist(stErr) {
-		log.Println("Did not find SteamCMD in the current dir. Please install it before proceeding.")
+		log.Println("Did not find SteamCMD in the current dir. Please install it before proceeding")
 		return false
 	}
+
+	log.Println("Found SteamCMD in the current directory... proceeding")
 	return true
 }
 
 // if steamcmd is installed. get the build IDs and return them as a slice
-func getAppBuildInfo(appid int) ([]string, error) {
-	if isSteamCMDInstalled() {
-		fmt.Println("Success!")
+func getAppBuildInfo(appid int) ([][]string, error) {
 		resp, respErr := getAppIDInfo(appid)
 		if respErr != nil {
 			return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
 		}
 
-		branchPos := bytes.Index(resp, []byte("branches"))
+		if bytes.ContainsAny(resp, "Rate Limit Exceeded") {
+			return nil, errors.New("exceeded steamcmd rate limit")
+		}
+
+		branchPos := bytes.Index(resp, []byte("buildid"))
+
 		length := len(string(resp)) - 1
 		tmpString := string(resp[branchPos:length])
 
-		//trimNewline := strings.Trim(tmpString, "\n")
-		//remTabs := strings.ReplaceAll(trimNewline, "\t", "")
+		remQuotes := strings.ReplaceAll(tmpString, "\"", "")
+		remTabs := strings.ReplaceAll(remQuotes, "\t", "")
 
 		// simple regex to obtain only the build IDs but not epoch time
-		re, compErr := regexp.Compile("\\d{5,8}")
+		re, compErr := regexp.Compile("buildid\\D+(?s)(\\d{5,8})")
 		if compErr != nil {
 			return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
 		}
 
-		if matchSlice := re.FindAllString(tmpString, 2); matchSlice != nil {
-			fmt.Println(matchSlice)
-			return matchSlice, nil
-		} else {
+		//fmt.Println(remTabs)
+
+		match := re.FindAllStringSubmatch(remTabs, 2)
+
+		if len(match) < 1 {
 			return nil, errors.New("could not find any build information from steamcmd")
 		}
-	}
-	return nil, errors.New("did not find steamcmd in the run dir")
-}
 
+		return match, nil
+
+}
 // convert each build id into int and add to map
-func parseBuildSlice(buildID []string) (map[string]int, error) {
+func parseBuildSlice(buildID [][]string) (map[string]int, error) {
 	builds := make(map[string]int)
 
-	if pubBuildID, pubErr := strconv.Atoi(buildID[0]); pubErr != nil {
+	fmt.Println(buildID)
+	if pubBuildID, pubErr := strconv.Atoi(buildID[0][1]); pubErr != nil {
 		builds["public"] = pubBuildID
 	} else {
 		return nil, errors.New("could not convert public build id into int")
 	}
 
-	if expBuildID, expErr := strconv.Atoi(buildID[1]); expErr != nil {
+	if expBuildID, expErr := strconv.Atoi(buildID[0][2]); expErr != nil {
 		builds["experimental"] = expBuildID
 	} else {
 		return nil, errors.New("could not convert experimental build id into int")
@@ -206,6 +214,25 @@ func getAppIDInfo(appid int) ([]byte, error) {
 }
 
 
+func getBuilds(appid int) {
+	if isSteamCMDInstalled() {
+		buildIDs, err := getAppBuildInfo(appid)
+		checkErr(err)
+
+		builds, err := parseBuildSlice(buildIDs)
+		checkErr(err)
+		fmt.Println(builds["public"])
+		fmt.Println(builds["experimental"])
+	}
+
+}
+
+func checkErr(err error) {
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
 func main() {
 	// get list of game names/appids
 	// gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
@@ -219,7 +246,7 @@ func main() {
 				fmt.Println(appid)
 			}
 	*/
-	getAppBuildInfo(717790)
+	getBuilds(717790)
 
 	//	log.Println("Sleeping for 15m...")
 	//	time.Sleep(15 * time.Minute)
