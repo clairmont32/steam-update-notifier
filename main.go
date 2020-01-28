@@ -154,9 +154,10 @@ func getAppBuildInfo(appid int) ([][]string, error) {
 			return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
 		}
 
-		if bytes.ContainsAny(resp, "Rate Limit Exceeded") {
-			return nil, errors.New("exceeded steamcmd rate limit")
-		}
+		// TODO: fix rate limit detection
+		//if bytes.ContainsAny(resp, `Rate Limit Exceeded`) {
+		//	return nil, errors.New("exceeded steamcmd rate limit")
+		//}
 
 		branchPos := bytes.Index(resp, []byte("buildid"))
 
