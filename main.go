@@ -148,61 +148,65 @@ func isSteamCMDInstalled() bool {
 }
 
 // if steamcmd is installed. get the build IDs and return them as a slice
-func getAppBuildInfo(appid int) ([][]string, error) {
-		resp, respErr := getAppIDInfo(appid)
-		if respErr != nil {
-			return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
-		}
-
-		// TODO: fix rate limit detection
-		//if bytes.ContainsAny(resp, `Rate Limit Exceeded`) {
-		//	return nil, errors.New("exceeded steamcmd rate limit")
-		//}
-
-		branchPos := bytes.Index(resp, []byte("buildid"))
-
-		length := len(string(resp)) - 1
-		tmpString := string(resp[branchPos:length])
-
-		remQuotes := strings.ReplaceAll(tmpString, "\"", "")
-		remTabs := strings.ReplaceAll(remQuotes, "\t", "")
-
-		// simple regex to obtain only the build IDs but not epoch time
-		re, compErr := regexp.Compile("buildid(\\d{4,8})")
-		if compErr != nil {
-			return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
-		}
-
-		// fmt.Println(remTabs)
-
-		match := re.FindAllStringSubmatch(remTabs, 2)
-
-		if len(match) < 1 {
-			return nil, errors.New("could not find any build information from steamcmd")
-		}
-
-		return match, nil
-
-}
-// convert each build id into int and add to map
-func parseBuildSlice(buildID [][]string) (map[string]int, error) {
-	builds := make(map[string]int)
-
-	pubBuildID, pubErr := strconv.Atoi(buildID[0][1])
-	 if pubErr != nil {
-		 return nil, errors.New(fmt.Sprintf("could not convert public build id into int.\nerror: %v", pubErr))
-	 }
-		 builds["public"] = pubBuildID
-
-	expBuildID, expErr := strconv.Atoi(buildID[1][1])
-	if expErr != nil {
-		return nil, errors.New(fmt.Sprintf("could not convert experimental build id into int\nerror: %v", expErr))
+func getAppBuildInfo(appid int) ([]string, error) {
+	resp, respErr := getAppIDInfo(appid)
+	if respErr != nil {
+		return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
 	}
-	builds["experimental"] = expBuildID
+
+	// TODO: fix rate limit detection
+	//if bytes.ContainsAny(resp, `Rate Limit Exceeded`) {
+	//	return nil, errors.New("exceeded steamcmd rate limit")
+	//}
+
+	branchPos := bytes.Index(resp, []byte("buildid"))
+
+	length := len(string(resp)) - 1
+	tmpString := string(resp[branchPos:length])
+
+	remQuotes := strings.ReplaceAll(tmpString, "\"", "")
+	remTabs := strings.ReplaceAll(remQuotes, "\t", "")
+
+	// simple regex to obtain only the build IDs but not epoch time
+	re, compErr := regexp.Compile("\\d{4,12}")
+	if compErr != nil {
+		return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
+	}
+
+	// fmt.Println(remTabs)
+
+	match := re.FindAllString(remTabs, 6)
+
+	if len(match) < 1 {
+		return nil, errors.New("could not find any build information from steamcmd")
+	}
+	return match, nil
+}
+
+// convert each build id into int and add to map
+func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]interface{}, error) {
+	// TODO: implement index out of range checks and handle appropriately
+		pubTime, parseErr := strconv.ParseInt(buildInfo[1], 10, 64)
+		if parseErr != nil {
+			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
+		}
+
+		betaTime, parseErr := strconv.ParseInt(buildInfo[3], 10, 64)
+		if parseErr != nil {
+			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
+		}
+
+		privateTime, parseErr := strconv.ParseInt(buildInfo[5], 10, 64)
+		if parseErr != nil {
+			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
+	}
+
+	builds := map[string]map[string]map[string]interface{}{"buildInfo": {"public": {"buildid": buildInfo[0], "timestamp": pubTime},
+		"beta":    {"buildid": buildInfo[2], "timestamp": betaTime},
+		"private": {"buildid": buildInfo[4], "timestamp": privateTime}}}
 
 	return builds, nil
 }
-
 
 func getAppIDInfo(appid int) ([]byte, error) {
 	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
@@ -211,7 +215,6 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
-
 func getBuilds(appid int) {
 	if isSteamCMDInstalled() {
 		buildIDs, err := getAppBuildInfo(appid)
@@ -219,8 +222,7 @@ func getBuilds(appid int) {
 
 		builds, err := parseBuildSlice(buildIDs)
 		checkErr(err)
-		fmt.Println(builds["public"])
-		fmt.Println(builds["experimental"])
+		fmt.Println(builds["buildInfo"]["public"])
 	}
 
 }
