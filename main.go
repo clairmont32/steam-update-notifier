@@ -215,12 +215,17 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
-func saveBuildInfo(builds map[string]map[string]map[string]interface{}) {
+func saveBuildInfo(builds map[string]map[string]map[string]interface{}) (bool, error){
 	_, err := os.Stat("builds.txt")
 	if os.IsNotExist(err) {
 		_, _ = os.Create("builds.txt")
 	}
+	file, openErr := os.OpenFile("builds.txt", os.O_WRONLY|os.O_APPEND, 0666)
+	if openErr != nil {
+		return false, errors.New(fmt.Sprintf("could not open builds.txt\nerror: %v", openErr))
+	}
 
+	return true
 }
 
 func getBuilds(appid int) {
