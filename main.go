@@ -168,12 +168,12 @@ func getAppBuildInfo(appid int) ([][]string, error) {
 		remTabs := strings.ReplaceAll(remQuotes, "\t", "")
 
 		// simple regex to obtain only the build IDs but not epoch time
-		re, compErr := regexp.Compile("buildid\\D+(?s)(\\d{5,8})")
+		re, compErr := regexp.Compile("buildid(\\d{4,8})")
 		if compErr != nil {
 			return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
 		}
 
-		//fmt.Println(remTabs)
+		// fmt.Println(remTabs)
 
 		match := re.FindAllStringSubmatch(remTabs, 2)
 
@@ -188,23 +188,20 @@ func getAppBuildInfo(appid int) ([][]string, error) {
 func parseBuildSlice(buildID [][]string) (map[string]int, error) {
 	builds := make(map[string]int)
 
-	fmt.Println(buildID)
-	if pubBuildID, pubErr := strconv.Atoi(buildID[0][1]); pubErr != nil {
-		builds["public"] = pubBuildID
-	} else {
-		return nil, errors.New("could not convert public build id into int")
-	}
+	pubBuildID, pubErr := strconv.Atoi(buildID[0][1])
+	 if pubErr != nil {
+		 return nil, errors.New(fmt.Sprintf("could not convert public build id into int.\nerror: %v", pubErr))
+	 }
+		 builds["public"] = pubBuildID
 
-	if expBuildID, expErr := strconv.Atoi(buildID[0][2]); expErr != nil {
-		builds["experimental"] = expBuildID
-	} else {
-		return nil, errors.New("could not convert experimental build id into int")
+	expBuildID, expErr := strconv.Atoi(buildID[1][1])
+	if expErr != nil {
+		return nil, errors.New(fmt.Sprintf("could not convert experimental build id into int\nerror: %v", expErr))
 	}
+	builds["experimental"] = expBuildID
 
 	return builds, nil
-
 }
-
 
 
 func getAppIDInfo(appid int) ([]byte, error) {
