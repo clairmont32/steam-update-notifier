@@ -215,6 +215,14 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
+func saveBuildInfo(builds map[string]map[string]map[string]interface{}) {
+	_, err := os.Stat("builds.txt")
+	if os.IsNotExist(err) {
+		_, _ = os.Create("builds.txt")
+	}
+
+}
+
 func getBuilds(appid int) {
 	if isSteamCMDInstalled() {
 		buildIDs, err := getAppBuildInfo(appid)
