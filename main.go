@@ -166,6 +166,7 @@ func getAppBuildInfo(appid int) ([]string, error) {
 
 	remQuotes := strings.ReplaceAll(tmpString, "\"", "")
 	remTabs := strings.ReplaceAll(remQuotes, "\t", "")
+	fmt.Println(remTabs)
 
 	// simple regex to obtain only the build IDs but not epoch time
 	re, compErr := regexp.Compile("\\d{4,12}")
@@ -183,9 +184,65 @@ func getAppBuildInfo(appid int) ([]string, error) {
 	return match, nil
 }
 
+type buildDetails struct {
+	BuildInfo struct {
+		Public struct {
+			BuildID   int       `json:"buildId"`
+			Timestamp time.Time `json:"timestamp"`
+		} `json:"public"`
+		Beta struct {
+			BuildID   int       `json:"buildId"`
+			Timestamp time.Time `json:"timestamp"`
+		} `json:"beta"`
+		Private struct {
+			BuildID   int       `json:"buildId"`
+			Timestamp time.Time `json:"timestamp"`
+		}
+	} `json:"buildInfo"`
+}
+
 // convert each build id into int and add to map
-func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]interface{}, error) {
-	// TODO: implement index out of range checks and handle appropriately
+func parseBuildSlice(buildInfo []string) (buildDetails, error) {
+	var build buildDetails
+
+	if len(buildInfo) == 6 {
+		pubBuildId, pubConvErr := strconv.Atoi(buildInfo[0])
+		if pubConvErr != nil {
+			return build, pubConvErr
+		}
+		pubTime, pubTimeErr := strconv.ParseInt(buildInfo[1], 10, 64)
+		if pubTimeErr != nil {
+			return build, pubTimeErr
+		}
+		build.BuildInfo.Public.BuildID = pubBuildId
+		build.BuildInfo.Public.Timestamp = time.Unix(pubTime, 0)
+
+		betaBuildId, betaConvErr := strconv.Atoi(buildInfo[2])
+		if betaConvErr != nil {
+			return build, betaConvErr
+		}
+		betaTime, betaTimeErr := strconv.ParseInt(buildInfo[3], 10, 64)
+		if betaTimeErr != nil {
+			return build, betaTimeErr
+		}
+		build.BuildInfo.Beta.BuildID = betaBuildId
+		build.BuildInfo.Beta.Timestamp = time.Unix(betaTime, 0)
+
+		privBuildId, privConvErr := strconv.Atoi(buildInfo[4])
+		if privConvErr != nil {
+			return build, privConvErr
+		}
+		privTime, privimeErr := strconv.ParseInt(buildInfo[5], 10, 64)
+		if privimeErr != nil {
+			return build, privimeErr
+		}
+		build.BuildInfo.Private.BuildID = privBuildId
+		build.BuildInfo.Private.Timestamp = time.Unix(privTime, 0)
+	} else {
+		return build, errors.New("unable to parse buildInfo due to unexpected length")
+	}
+
+	/*
 		pubTime, parseErr := strconv.ParseInt(buildInfo[1], 10, 64)
 		if parseErr != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
@@ -194,7 +251,7 @@ func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]inter
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
 		}
-		
+
 		betaTime, parseErr := strconv.ParseInt(buildInfo[3], 10, 64)
 		if parseErr != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
@@ -203,13 +260,14 @@ func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]inter
 		privateTime, parseErr := strconv.ParseInt(buildInfo[5], 10, 64)
 		if parseErr != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
-	}
+		}
 
-	builds := map[string]map[string]map[string]int64{"buildInfo": {"public": {"buildid": pubBuild, "timestamp": pubTime},
-		"beta":    {"buildid": buildInfo[2], "timestamp": betaTime},
-		"private": {"buildid": buildInfo[4], "timestamp": privateTime}}}
-
-	return builds, nil
+		builds := map[string]map[string]map[string]int64{"buildInfo": {"public": {"buildid": int64(pubBuild), "timestamp": pubTime},
+			"beta":    {"buildid": int64(beta), "timestamp": betaTime},
+			"private": {"buildid": int64(buildInfo[4]), "timestamp": privateTime}}}
+		return builds, nil
+	*/
+	return build, nil
 }
 
 func getAppIDInfo(appid int) ([]byte, error) {
@@ -219,12 +277,17 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
-func checkBuildTime(builds map[string]map[string]map[string]interface{}) {
-	pubTime := builds["buildInfo"]["public"]["timestamp"]
-	betaTime := builds["buildInfo"]["beta"]["timestamp"]
-	privTime := builds["buildInfo"]["private"]["timestamp"]
-
-	if time.Since(time.Unix(int64(pubTime), 0)
+func checkBuildTime(builds buildDetails) {
+	// todo: clean up this repititive code. maybe redesign the struct?
+	if time.Since(builds.BuildInfo.Private.Timestamp).Minutes() < 60 {
+		log.Println("Private build has been updated")
+	}
+	if time.Since(builds.BuildInfo.Beta.Timestamp).Minutes() < 60 {
+		log.Println("Beta build has been updated")
+	}
+	if time.Since(builds.BuildInfo.Public.Timestamp).Minutes() < 60 {
+		log.Println("Public build has been updated")
+	}
 }
 
 func getBuilds(appid int) {
@@ -234,7 +297,8 @@ func getBuilds(appid int) {
 
 		builds, err := parseBuildSlice(buildIDs)
 		checkErr(err)
-
+		fmt.Println(builds)
+		checkBuildTime(builds)
 	}
 
 }
