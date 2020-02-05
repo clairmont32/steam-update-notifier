@@ -169,7 +169,7 @@ func getAppBuildInfo(appid int) ([]string, error) {
 	fmt.Println(remTabs)
 
 	// simple regex to obtain only the build IDs but not epoch time
-	re, compErr := regexp.Compile("\\d{4,12}")
+	re, compErr := regexp.Compile("timeupdated(\\d{6,12})")
 	if compErr != nil {
 		return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
 	}
@@ -201,74 +201,7 @@ type buildDetails struct {
 	} `json:"buildInfo"`
 }
 
-// convert each build id into int and add to map
-func parseBuildSlice(buildInfo []string) (buildDetails, error) {
-	var build buildDetails
 
-	if len(buildInfo) == 6 {
-		pubBuildId, pubConvErr := strconv.Atoi(buildInfo[0])
-		if pubConvErr != nil {
-			return build, pubConvErr
-		}
-		pubTime, pubTimeErr := strconv.ParseInt(buildInfo[1], 10, 64)
-		if pubTimeErr != nil {
-			return build, pubTimeErr
-		}
-		build.BuildInfo.Public.BuildID = pubBuildId
-		build.BuildInfo.Public.Timestamp = time.Unix(pubTime, 0)
-
-		betaBuildId, betaConvErr := strconv.Atoi(buildInfo[2])
-		if betaConvErr != nil {
-			return build, betaConvErr
-		}
-		betaTime, betaTimeErr := strconv.ParseInt(buildInfo[3], 10, 64)
-		if betaTimeErr != nil {
-			return build, betaTimeErr
-		}
-		build.BuildInfo.Beta.BuildID = betaBuildId
-		build.BuildInfo.Beta.Timestamp = time.Unix(betaTime, 0)
-
-		privBuildId, privConvErr := strconv.Atoi(buildInfo[4])
-		if privConvErr != nil {
-			return build, privConvErr
-		}
-		privTime, privimeErr := strconv.ParseInt(buildInfo[5], 10, 64)
-		if privimeErr != nil {
-			return build, privimeErr
-		}
-		build.BuildInfo.Private.BuildID = privBuildId
-		build.BuildInfo.Private.Timestamp = time.Unix(privTime, 0)
-	} else {
-		return build, errors.New("unable to parse buildInfo due to unexpected length")
-	}
-
-	/*
-		pubTime, parseErr := strconv.ParseInt(buildInfo[1], 10, 64)
-		if parseErr != nil {
-			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
-		}
-		pubBuild, err := strconv.Atoi(buildInfo[0])
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
-		}
-
-		betaTime, parseErr := strconv.ParseInt(buildInfo[3], 10, 64)
-		if parseErr != nil {
-			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
-		}
-
-		privateTime, parseErr := strconv.ParseInt(buildInfo[5], 10, 64)
-		if parseErr != nil {
-			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
-		}
-
-		builds := map[string]map[string]map[string]int64{"buildInfo": {"public": {"buildid": int64(pubBuild), "timestamp": pubTime},
-			"beta":    {"buildid": int64(beta), "timestamp": betaTime},
-			"private": {"buildid": int64(buildInfo[4]), "timestamp": privateTime}}}
-		return builds, nil
-	*/
-	return build, nil
-}
 
 func getAppIDInfo(appid int) ([]byte, error) {
 	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
@@ -277,9 +210,28 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
-func checkBuildTime(builds buildDetails) {
+func checkBuildTime(timeSlice []string) (string, error) {
 	// todo: clean up this repititive code. maybe redesign the struct?
-	if time.Since(builds.BuildInfo.Private.Timestamp).Minutes() < 60 {
+	for i, timeStr := range timeSlice {
+		buildTime, convErr := strconv.ParseInt(timeStr, 10, 64)
+		if convErr != nil {
+			return nil, convErr
+		}
+
+		if time.Since(time.Unix(buildTime, 0)).Minutes() < 15 {
+			switch {
+			case i == 0:
+				return "public", nil
+			case i == 1:
+				return "beta", nil
+
+			}
+
+		}
+
+
+	}
+	if time.Since().Minutes() < 60 {
 		log.Println("Private build has been updated")
 	}
 	if time.Since(builds.BuildInfo.Beta.Timestamp).Minutes() < 60 {
@@ -292,13 +244,10 @@ func checkBuildTime(builds buildDetails) {
 
 func getBuilds(appid int) {
 	if isSteamCMDInstalled() {
-		buildIDs, err := getAppBuildInfo(appid)
+		buildTimes, err := getAppBuildInfo(appid)
 		checkErr(err)
 
-		builds, err := parseBuildSlice(buildIDs)
-		checkErr(err)
-		fmt.Println(builds)
-		checkBuildTime(builds)
+		checkBuildTime(buildTimes)
 	}
 
 }
