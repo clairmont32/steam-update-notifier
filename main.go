@@ -190,7 +190,11 @@ func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]inter
 		if parseErr != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
 		}
-
+		pubBuild, err := strconv.Atoi(buildInfo[0])
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
+		}
+		
 		betaTime, parseErr := strconv.ParseInt(buildInfo[3], 10, 64)
 		if parseErr != nil {
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
@@ -201,7 +205,7 @@ func parseBuildSlice(buildInfo []string) (map[string]map[string]map[string]inter
 			return nil, errors.New(fmt.Sprintf("could not convert public build timestamp to int64.\nerror: %v", parseErr))
 	}
 
-	builds := map[string]map[string]map[string]interface{}{"buildInfo": {"public": {"buildid": buildInfo[0], "timestamp": pubTime},
+	builds := map[string]map[string]map[string]int64{"buildInfo": {"public": {"buildid": pubBuild, "timestamp": pubTime},
 		"beta":    {"buildid": buildInfo[2], "timestamp": betaTime},
 		"private": {"buildid": buildInfo[4], "timestamp": privateTime}}}
 
@@ -215,17 +219,12 @@ func getAppIDInfo(appid int) ([]byte, error) {
 	return outBytes, err
 }
 
-func saveBuildInfo(builds map[string]map[string]map[string]interface{}) (bool, error){
-	_, err := os.Stat("builds.txt")
-	if os.IsNotExist(err) {
-		_, _ = os.Create("builds.txt")
-	}
-	file, openErr := os.OpenFile("builds.txt", os.O_WRONLY|os.O_APPEND, 0666)
-	if openErr != nil {
-		return false, errors.New(fmt.Sprintf("could not open builds.txt\nerror: %v", openErr))
-	}
+func checkBuildTime(builds map[string]map[string]map[string]interface{}) {
+	pubTime := builds["buildInfo"]["public"]["timestamp"]
+	betaTime := builds["buildInfo"]["beta"]["timestamp"]
+	privTime := builds["buildInfo"]["private"]["timestamp"]
 
-	return true
+	if time.Since(time.Unix(int64(pubTime), 0)
 }
 
 func getBuilds(appid int) {
@@ -235,7 +234,7 @@ func getBuilds(appid int) {
 
 		builds, err := parseBuildSlice(buildIDs)
 		checkErr(err)
-		fmt.Println(builds["buildInfo"]["public"])
+
 	}
 
 }
