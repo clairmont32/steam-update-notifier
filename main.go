@@ -147,6 +147,15 @@ func isSteamCMDInstalled() bool {
 	return true
 }
 
+// get appid info from steamcmd
+func getAppIDInfo(appid int) ([]byte, error) {
+	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
+	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
+	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+exit").Output()
+	return outBytes, err
+}
+
+
 // if steamcmd is installed. get the build IDs and return them as a slice
 func getAppBuildInfo(appid int) ([]string, error) {
 	resp, respErr := getAppIDInfo(appid)
@@ -166,7 +175,6 @@ func getAppBuildInfo(appid int) ([]string, error) {
 
 	remQuotes := strings.ReplaceAll(tmpString, "\"", "")
 	remTabs := strings.ReplaceAll(remQuotes, "\t", "")
-	fmt.Println(remTabs)
 
 	// simple regex to obtain only the build IDs but not epoch time
 	re, compErr := regexp.Compile("timeupdated(\\d{6,12})")
@@ -176,80 +184,60 @@ func getAppBuildInfo(appid int) ([]string, error) {
 
 	// fmt.Println(remTabs)
 
-	match := re.FindAllString(remTabs, 6)
+	match := re.FindAllStringSubmatch(remTabs, 6)
 
 	if len(match) < 1 {
 		return nil, errors.New("could not find any build information from steamcmd")
 	}
-	return match, nil
+
+	// create a new slice containing only the epoch strings from each build's timestamp
+	var matchedTimes []string
+	for _, group := range match {
+
+		matchedTimes = append(matchedTimes, group[1])
+	}
+	return matchedTimes, nil
 }
 
-type buildDetails struct {
-	BuildInfo struct {
-		Public struct {
-			BuildID   int       `json:"buildId"`
-			Timestamp time.Time `json:"timestamp"`
-		} `json:"public"`
-		Beta struct {
-			BuildID   int       `json:"buildId"`
-			Timestamp time.Time `json:"timestamp"`
-		} `json:"beta"`
-		Private struct {
-			BuildID   int       `json:"buildId"`
-			Timestamp time.Time `json:"timestamp"`
-		}
-	} `json:"buildInfo"`
-}
-
-
-
-func getAppIDInfo(appid int) ([]byte, error) {
-	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
-	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
-	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+exit").Output()
-	return outBytes, err
-}
-
+// check build timestamps to determine if a build was updated
 func checkBuildTime(timeSlice []string) (string, error) {
-	// todo: clean up this repititive code. maybe redesign the struct?
+	// iterate through slice of epoch strings and convert them to int64
 	for i, timeStr := range timeSlice {
 		buildTime, convErr := strconv.ParseInt(timeStr, 10, 64)
 		if convErr != nil {
-			return nil, convErr
+			return "nil", convErr
 		}
 
-		if time.Since(time.Unix(buildTime, 0)).Minutes() < 15 {
+		// if time since is < 1h, return which build was updated
+		if time.Since(time.Unix(buildTime, 0)).Hours() < 1 {
 			switch {
 			case i == 0:
 				return "public", nil
 			case i == 1:
 				return "beta", nil
-
+			case i == 2:
+				return "private", nil
 			}
-
 		}
-
-
+		i++
 	}
-	if time.Since().Minutes() < 60 {
-		log.Println("Private build has been updated")
-	}
-	if time.Since(builds.BuildInfo.Beta.Timestamp).Minutes() < 60 {
-		log.Println("Beta build has been updated")
-	}
-	if time.Since(builds.BuildInfo.Public.Timestamp).Minutes() < 60 {
-		log.Println("Public build has been updated")
-	}
+	return "", nil
 }
 
-func getBuilds(appid int) {
-	if isSteamCMDInstalled() {
-		buildTimes, err := getAppBuildInfo(appid)
-		checkErr(err)
+func getBuilds(appid int, gameNameBytes []byte) {
 
-		checkBuildTime(buildTimes)
-	}
+			gameName := getGameName(appid, gameNameBytes)
 
+			buildTimes, err := getAppBuildInfo(appid)
+			checkErr(err)
+
+			build, timeErr := checkBuildTime(buildTimes)
+			checkErr(timeErr)
+			if len(build) > 0 {
+				postToDiscord(fmt.Sprintf("%s's %v branch has a new build!", gameName, build))
+			} else {
+				log.Printf("No new build detected for %v\n", gameName)
+			}
 }
 
 func checkErr(err error) {
@@ -260,19 +248,15 @@ func checkErr(err error) {
 
 func main() {
 	// get list of game names/appids
-	// gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
+	gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
 
 	// check for a new steam news post for a list of appids
-	/*
-		for {
-			appIDs := []int{717790}
-			for _, appid := range appIDs {
-				// name := getGameName(appid, gameNameBytes)
-				fmt.Println(appid)
+	if isSteamCMDInstalled() {
+				getBuilds(717790, gameNameBytes)
 			}
-	*/
-	getBuilds(717790)
+		}
 
-	//	log.Println("Sleeping for 15m...")
-	//	time.Sleep(15 * time.Minute)
-}
+		//	log.Println("Sleeping for 15m...")
+		//	time.Sleep(15 * time.Minute)
+
+
