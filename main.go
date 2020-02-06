@@ -80,21 +80,15 @@ func getAPIContent(url string) []byte {
 	} else {
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
-			postToDiscord(fmt.Sprintf("Encountered and error reading response from %v", url))
+			postToDiscord(fmt.Sprintf("Encountered an error reading response from %v", url))
 		}
 		return body
 	}
 	return []byte{}
-
 }
 
 type discordText struct {
 	Content string `json:"content"`
-}
-
-// format string for discord notification
-func formatBuildMessage(name string) string {
-	return ""
 }
 
 // post string returned from formatNewsMessage() to discord
@@ -131,8 +125,6 @@ func postToDiscord(content string) {
 			log.Fatalf("Could not read response body. Error: %v", readErr)
 		}
 		log.Fatal(string(body))
-	} else {
-		fmt.Println("Success!")
 	}
 }
 
