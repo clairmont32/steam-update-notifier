@@ -3,11 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,33 +50,6 @@ type appIDTranslator struct {
 	}
 }
 
-func saveNewsGid(gid string) {
-	file, openErr := os.OpenFile("news_gid.txt", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-	if openErr != nil {
-		log.Fatalf("Could not open news_gid.txt. Error: %v", openErr)
-	}
-	defer file.Close()
-
-	log.Println(gid)
-	n, writeErr := file.WriteString(gid + "\n")
-	if writeErr != nil {
-		log.Fatalf("Could not write GID to news_gid.txt")
-	}
-	if n < 1 {
-		log.Fatal("Did not write more than 1 byte to news_gid.txt")
-	}
-
-	log.Printf("GID %v written to file", gid)
-}
-
-func readNewsGid() []byte {
-	gids, openErr := ioutil.ReadFile("news_gid.txt")
-	if openErr != nil {
-		log.Fatalf("Could not read from news_gid.txt. Error: %v", openErr)
-	}
-	return gids
-}
-
 // generic HTTP POST to whatever URL you give it
 func getAPIContent(url string) []byte {
 	log.Printf("Performing GET request to %v...\n", url)
@@ -102,25 +80,11 @@ func getAPIContent(url string) []byte {
 	} else {
 		body, readErr := ioutil.ReadAll(resp.Body)
 		if readErr != nil {
-			postToDiscord(fmt.Sprintf("Encountered and error reading response from %v", url))
+			postToDiscord(fmt.Sprintf("Encountered an error reading response from %v", url))
 		}
 		return body
 	}
 	return []byte{}
-
-}
-
-type newsResponse struct {
-	AppNews struct {
-		AppID     int `json:"appid"`
-		NewsItems []struct {
-			Gid    string `json:"gid"`
-			Title  string `json:"title"`
-			Date   int64  `json:"date"`
-			URL    string `json:"url"`
-			Author string `json:"author"`
-		} `json:"newsitems"`
-	}
 }
 
 type discordText struct {
@@ -143,6 +107,19 @@ func formatNewsMessage(content newsResponse, name string) string {
 		messageString = fmt.Sprintf("New news post detected for %v\n%v\n%v\n", name, item.Title, item.URL)
 	}
 	return messageString
+}
+
+type newsResponse struct {
+	AppNews struct {
+		AppID     int `json:"appid"`
+		NewsItems []struct {
+			Gid    string `json:"gid"`
+			Title  string `json:"title"`
+			Date   int64  `json:"date"`
+			URL    string `json:"url"`
+			Author string `json:"author"`
+		} `json:"newsitems"`
+	}
 }
 
 // post string returned from formatNewsMessage() to discord
@@ -179,8 +156,6 @@ func postToDiscord(content string) {
 			log.Fatalf("Could not read response body. Error: %v", readErr)
 		}
 		log.Fatal(string(body))
-	} else {
-		fmt.Println("Success!")
 	}
 }
 
@@ -223,6 +198,113 @@ func getSteamNews(gidMap map[string]string, appid int, name string) {
 	}
 }
 
+func isSteamCMDInstalled() bool {
+	_, stErr := os.Stat("steamcmd.sh")
+	if os.IsNotExist(stErr) {
+		log.Println("Did not find SteamCMD in the current dir. Please install it before proceeding")
+		return false
+	}
+
+	log.Println("Found SteamCMD in the current directory... proceeding")
+	return true
+}
+
+// get appid info from steamcmd
+func getAppIDInfo(appid int) ([]byte, error) {
+	appInfoRequest := fmt.Sprintf("+app_info_request %v", appid)
+	appInfoPrint := fmt.Sprintf("+app_info_print %v", appid)
+	outBytes, err := exec.Command("./steamcmd.sh", "+login anonymous", appInfoRequest, appInfoPrint, "+exit").Output()
+	return outBytes, err
+}
+
+
+// if steamcmd is installed. get the build IDs and return them as a slice
+func getAppBuildInfo(appid int) ([]string, error) {
+	resp, respErr := getAppIDInfo(appid)
+	if respErr != nil {
+		return nil, errors.New(fmt.Sprintf("error getting build info. error: %v", respErr))
+	}
+
+	// TODO: fix rate limit detection
+	//if bytes.ContainsAny(resp, `Rate Limit Exceeded`) {
+	//	return nil, errors.New("exceeded steamcmd rate limit")
+	//}
+
+	branchPos := bytes.Index(resp, []byte("buildid"))
+
+	length := len(string(resp)) - 1
+	tmpString := string(resp[branchPos:length])
+
+	remQuotes := strings.ReplaceAll(tmpString, "\"", "")
+	remTabs := strings.ReplaceAll(remQuotes, "\t", "")
+
+	// simple regex to obtain only the build IDs but not epoch time
+	re, compErr := regexp.Compile("timeupdated(\\d{6,12})")
+	if compErr != nil {
+		return nil, errors.New(fmt.Sprintf("regex compile error. error: %v", compErr))
+	}
+
+	// fmt.Println(remTabs)
+
+	match := re.FindAllStringSubmatch(remTabs, 6)
+
+	if len(match) < 1 {
+		return nil, errors.New("could not find any build information from steamcmd")
+	}
+
+	// create a new slice containing only the epoch strings from each build's timestamp
+	var matchedTimes []string
+	for _, group := range match {
+
+		matchedTimes = append(matchedTimes, group[1])
+	}
+	return matchedTimes, nil
+}
+
+// check build timestamps to determine if a build was updated
+func checkBuildTime(timeSlice []string) (string, error) {
+	// iterate through slice of epoch strings and convert them to int64
+	for i, timeStr := range timeSlice {
+		buildTime, convErr := strconv.ParseInt(timeStr, 10, 64)
+		if convErr != nil {
+			return "nil", convErr
+		}
+
+		// if time since is < 1h, return which build was updated
+		if time.Since(time.Unix(buildTime, 0)).Hours() < 1 {
+			switch {
+			case i == 0:
+				return "public", nil
+			case i == 1:
+				return "beta", nil
+			case i == 2:
+				return "private", nil
+			}
+		}
+		i++
+	}
+	return "", nil
+}
+
+func getBuilds(appid int, gameName string) {
+			buildTimes, err := getAppBuildInfo(appid)
+			checkErr(err)
+
+			build, timeErr := checkBuildTime(buildTimes)
+			checkErr(timeErr)
+			if len(build) > 0 {
+				postToDiscord(fmt.Sprintf("%s's %v branch has a new build!", gameName, build))
+			} else {
+				log.Printf("No new build detected for %v\n", gameName)
+			}
+}
+
+func checkErr(err error) {
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
 func main() {
 	// get list of game names/appids
 	gameNameBytes := getAPIContent("https://api.steampowered.com/ISteamApps/GetAppList/v2/")
@@ -234,6 +316,7 @@ func main() {
 		for _, appid := range appIDs {
 			name := getGameName(appid, gameNameBytes)
 			getSteamNews(gidMap, appid, name) // use a new goroutine for steam news
+			getBuilds(appid, name)
 		}
 
 		log.Println("Sleeping for 15m...")
