@@ -247,8 +247,3 @@ func main() {
 				getBuilds(717790, gameNameBytes)
 			}
 		}
-
-		//	log.Println("Sleeping for 15m...")
-		//	time.Sleep(15 * time.Minute)
-
-
